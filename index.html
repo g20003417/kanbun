@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>漢文 復文学習アプリ（スプレッドシート連携版）</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 20px;
+      background-color: #f8f9fa;
+    }
+
+    .app-header {
+      text-align: center;
+      max-width: 700px;
+      margin: 0 auto 20px;
+    }
+
+    .app-title {
+      font-size: 20px;
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .problem-info {
+      font-size: 15px;
+      color: #0275d8;
+      font-weight: bold;
+    }
+
+    .exercise-container {
+      display: flex;
+      flex-direction: row-reverse;
+      justify-content: center;
+      gap: 40px;
+      background: #fff;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      max-width: 700px;
+      margin: 0 auto;
+      min-height: 280px;
+    }
+
+    .vertical-text {
+      writing-mode: vertical-rl;
+      text-orientation: upright;
+      font-family: "Hiragino Mincho ProN", "Yu Mincho", serif;
+      font-size: 32px;
+      line-height: 2.2;
+      user-select: none;
+    }
+
+    .question-panel {
+      border-left: 2px dashed #ccc;
+      padding-left: 30px;
+      color: #444;
+    }
+
+    .panel-label {
+      font-size: 14px;
+      font-family: sans-serif;
+      color: #666;
+      margin-bottom: 12px;
+      writing-mode: horizontal-tb;
+    }
+
+    .answer-panel {
+      padding-right: 10px;
+    }
+
+    .char-node {
+      position: relative;
+      display: inline-block;
+      margin-bottom: 0.3em;
+    }
+
+    .char-node.has-kaeriten {
+      margin-bottom: 1.1em;
+    }
+
+    .kanji {
+      display: block;
+      line-height: 1.0;
+    }
+
+    .okuri-target {
+      position: absolute;
+      top: 2.0em;
+      right: -1.1em;
+      font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      font-size: 0.33em;
+      line-height: 1.0;
+      color: #0275d8;
+      background: #eef6ff;
+      border: 1px dashed #0275d8;
+      border-radius: 3px;
+      padding: 2px 3px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .okuri-target.filled {
+      color: #333;
+      background: transparent;
+      border: none;
+      font-weight: normal;
+    }
+
+    .okuri-target.empty {
+      background: transparent;
+      border: none;
+      color: transparent;
+      width: 1em;
+      height: 2em;
+    }
+
+    .kaeriten-target {
+      position: absolute;
+      top: 100%;
+      left: -0.4em;
+      transform: translateY(0.1em);
+      font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      font-size: 0.33em;
+      line-height: 1.0;
+      color: #0275d8;
+      background: #eef6ff;
+      border: 1px dashed #0275d8;
+      border-radius: 3px;
+      padding: 2px 4px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .kaeriten-target.filled {
+      color: #d9534f;
+      background: transparent;
+      border: none;
+      font-weight: bold;
+    }
+
+    .kaeriten-target.empty {
+      background: transparent;
+      border: none;
+      color: transparent;
+      width: 1em;
+      height: 1em;
+    }
+
+    .kaeriten-hyphen {
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translate(-50%, 0.1em);
+      font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+      font-size: 0.33em;
+      line-height: 1.0;
+      color: #d9534f;
+    }
+
+    .control-panel {
+      max-width: 700px;
+      margin: 20px auto 0;
+      text-align: center;
+    }
+
+    .button-group {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+
+    .btn-control {
+      padding: 10px 20px;
+      font-size: 15px;
+      font-weight: bold;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+    }
+
+    .btn-submit { background: #28a745; color: white; }
+    .btn-translation { background: #17a2b8; color: white; }
+    .btn-explain { background: #6c757d; color: white; }
+    .btn-nav { background: #ffc107; color: #212529; }
+    .btn-nav:disabled { background: #e0e0e0; color: #a0a0a0; cursor: not-allowed; box-shadow: none; }
+
+    .result-message {
+      font-size: 20px;
+      font-weight: bold;
+      min-height: 30px;
+    }
+
+    .result-success { color: #28a745; }
+    .result-error { color: #dc3545; }
+
+    /* モーダル共通設定 */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0,0,0,0.4);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .modal-content {
+      background: #fff;
+      padding: 24px;
+      border-radius: 12px;
+      max-width: 420px;
+      width: 90%;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      font-family: sans-serif;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+
+    .okuri-input {
+      width: 100%;
+      font-size: 20px;
+      padding: 10px;
+      box-sizing: border-box;
+      border: 2px solid #0275d8;
+      border-radius: 6px;
+      text-align: center;
+      margin-bottom: 12px;
+    }
+
+    .btn-group-vertical {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .btn-action {
+      width: 100%;
+      padding: 10px;
+      font-size: 15px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      background: #fff;
+      cursor: pointer;
+    }
+
+    .btn-primary { background: #0275d8; color: white; border: none; font-weight: bold; }
+    .btn-none { background: #e9ecef; color: #495057; font-weight: bold; }
+    .btn-delete { background: #f8d7da; color: #721c24; border-color: #f5c6cb; font-weight: bold; }
+    .btn-cancel { background: #6c757d; color: white; border: none; }
+
+    .hyphen-option {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      background: #f8f9fa;
+      padding: 10px;
+      border-radius: 8px;
+    }
+
+    .kaeriten-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .btn-kaeri {
+      padding: 10px 0;
+      font-size: 15px;
+      border: 1px solid #ccc;
+      background: #fff;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .popup-body-text {
+      font-size: 16px;
+      line-height: 1.6;
+      color: #333;
+      background: #f8f9fa;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+      text-align: left;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-header">
+    <div class="app-title">【漢文 復文トレーニング】</div>
+    <div class="problem-info" id="problem-info">読み込み中...</div>
+  </div>
+
+  <div class="exercise-container">
+    <div class="answer-panel">
+      <div class="panel-label">解答入力（漢文）</div>
+      <div class="vertical-text" id="kanbun-display"></div>
+    </div>
+
+    <div class="question-panel">
+      <div class="panel-label">書き下し文</div>
+      <div class="vertical-text" id="kakikudashi-display"></div>
+    </div>
+  </div>
+
+  <div class="control-panel">
+    <div class="button-group">
+      <button class="btn-control btn-nav" id="btn-prev" onclick="prevProblem()">◀ 前の問題</button>
+      <button class="btn-control btn-submit" onclick="checkAnswer()">答え合わせ</button>
+      <button class="btn-control btn-translation" onclick="openTranslationModal()">現代語訳</button>
+      <button class="btn-control btn-explain" onclick="openExplainModal()">解説</button>
+      <button class="btn-control btn-nav" id="btn-next" onclick="nextProblem()">次の問題 ▶</button>
+    </div>
+    <div class="result-message" id="result-message"></div>
+  </div>
+
+  <!-- 送り仮名入力モーダル -->
+  <div class="modal-overlay" id="okuri-modal">
+    <div class="modal-content">
+      <div class="modal-title" id="okuri-modal-title">送り仮名を入力</div>
+      <input type="text" id="okuri-input-text" class="okuri-input" placeholder="カタカナを入力 (例: メテ)">
+      
+      <div class="btn-group-vertical">
+        <button class="btn-action btn-primary" onclick="saveOkurigana()">決定</button>
+        <button class="btn-action btn-none" onclick="setOkuriganaNone()">なし（空欄にする）</button>
+        <button class="btn-action btn-delete" onclick="clearOkurigana()">初期状態に戻す</button>
+        <button class="btn-action btn-cancel" onclick="closeOkuriModal()">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 返点選択モーダル -->
+  <div class="modal-overlay" id="kaeri-modal">
+    <div class="modal-content">
+      <div class="modal-title">返点を選択</div>
+      <div class="hyphen-option">
+        <input type="checkbox" id="hyphen-check">
+        <label for="hyphen-check">ハイフン（│）をつける</label>
+      </div>
+      <div class="kaeriten-grid" id="kaeriten-buttons"></div>
+      <button class="btn-action btn-cancel" onclick="closeKaeriModal()">キャンセル</button>
+    </div>
+  </div>
+
+  <!-- 現代語訳モーダル -->
+  <div class="modal-overlay" id="translation-modal">
+    <div class="modal-content">
+      <div class="modal-title">📖 現代語訳</div>
+      <div class="popup-body-text" id="translation-text"></div>
+      <button class="btn-action btn-cancel" onclick="closeTranslationModal()">閉じる</button>
+    </div>
+  </div>
+
+  <!-- 解説モーダル -->
+  <div class="modal-overlay" id="explain-modal">
+    <div class="modal-content">
+      <div class="modal-title">💡 解説</div>
+      <div class="popup-body-text" id="explain-text"></div>
+      <button class="btn-action btn-cancel" onclick="closeExplainModal()">閉じる</button>
+    </div>
+  </div>
+
+  <script>
+    // 指定いただいたWeb公開CSVのURL
+    const SPREADSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTvjMhVn_kBmbDVqr-Mk9mLLlSsKM1Ym4P9V3DrcMVmh9SFRJk5uJwTFQxpSPNA8Me1aeoHTPdi0C6r/pub?gid=0&single=true&output=csv";
+
+    let problemList = [];
+    let currentIndex = 0;
+    let currentProblem = null;
+    let userAnswers = [];
+
+    const kaeritenCandidates = [
+      { label: "なし", val: "", isNone: true },
+      { label: "レ", val: "レ" }, { label: "一", val: "一" }, { label: "二", val: "二" }, { label: "三", val: "三" },
+      { label: "上", val: "上" }, { label: "中", val: "中" }, { label: "下", val: "下" }, { label: "甲", val: "甲" },
+      { label: "乙", val: "乙" }, { label: "丙", val: "丙" }, { label: "丁", val: "丁" },
+      { label: "一レ", val: "一レ" }, { label: "上レ", val: "上レ" }, { label: "甲レ", val: "甲レ" }
+    ];
+
+    let currentTargetIndex = null;
+
+    // CSV解析処理（カンマ区切りおよびダブルクォート処理対応）
+    function parseCSV(text) {
+      const lines = text.trim().split(/\r\n|\n/);
+      if (lines.length < 2) return [];
+
+      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      const result = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+        const values = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || lines[i].split(',');
+        const row = {};
+        headers.forEach((h, idx) => {
+          let val = values[idx] ? values[idx].trim() : "";
+          if (val.startsWith('"') && val.endsWith('"')) {
+            val = val.slice(1, -1).replace(/""/g, '"');
+          }
+          row[h] = val;
+        });
+        result.push(row);
+      }
+      return result;
+    }
+
+    // 正解訓読データから「白文（漢字配列）」を自動抽出
+    function extractHakubun(kundokuStr) {
+      if (!kundokuStr) return [];
+      return kundokuStr.trim().split(/\s+/).map(token => token.split('/')[0]);
+    }
+
+    // スプレッドシートからのデータ取得処理（エラーハンドリング強化）
+    async function fetchProblems() {
+      const infoElem = document.getElementById('problem-info');
+      try {
+        if (!SPREADSHEET_CSV_URL || SPREADSHEET_CSV_URL.includes("YOUR_SPREADSHEET")) {
+          throw new Error("URLが未設定です");
+        }
+        
+        const res = await fetch(SPREADSHEET_CSV_URL);
+        if (!res.ok) {
+          throw new Error(`HTTPステータスエラー: ${res.status}`);
+        }
+        
+        const csvText = await res.text();
+        const rawData = parseCSV(csvText);
+
+        if (!rawData || rawData.length === 0) {
+          throw new Error("CSVデータが空かフォーマット不正です");
+        }
+
+        // データの整形
+        problemList = rawData.map(item => ({
+          title: item.title || "問題",
+          kakikudashi: item.kakikudashi || "",
+          kundoku: item.kundoku || "",
+          translation: item.translation || "現代語訳はありません。",
+          explanation: item.explanation || "解説はありません。",
+          hakubunList: extractHakubun(item.kundoku || "")
+        }));
+
+        loadProblem(0);
+
+      } catch (e) {
+        console.error("スプレッドシートの読み込みエラー:", e);
+        infoElem.style.color = "#dc3545";
+        infoElem.textContent = `❌ データ取得エラー: ${e.message}（1行目のヘッダー名を確認してください）`;
+      }
+    }
+
+    // 問題読み込みと表示制御
+    function loadProblem(index) {
+      if (index < 0 || index >= problemList.length) return;
+      
+      currentIndex = index;
+      currentProblem = problemList[currentIndex];
+
+      userAnswers = currentProblem.hakubunList.map(() => ({
+        okuri: { val: "", isSet: false },
+        kaeri: { val: "", hasHyphen: false, isSet: false }
+      }));
+
+      const infoElem = document.getElementById('problem-info');
+      infoElem.style.color = "#0275d8";
+      infoElem.textContent = `第 ${currentIndex + 1} 問 / 全 ${problemList.length} 問 ： ${currentProblem.title}`;
+
+      document.getElementById('btn-prev').disabled = (currentIndex === 0);
+      document.getElementById('btn-next').disabled = (currentIndex === problemList.length - 1);
+
+      document.getElementById('result-message').textContent = '';
+      document.getElementById('result-message').className = 'result-message';
+
+      render();
+    }
+
+    function prevProblem() { loadProblem(currentIndex - 1); }
+    function nextProblem() { loadProblem(currentIndex + 1); }
+
+    function hiraToKata(str) {
+      return str.replace(/[\u3041-\u3096]/g, ch => String.fromCharCode(ch.charCodeAt(0) + 0x60));
+    }
+
+    function render() {
+      if (!currentProblem) return;
+
+      document.getElementById('kakikudashi-display').textContent = currentProblem.kakikudashi;
+
+      const container = document.getElementById('kanbun-display');
+      container.innerHTML = '';
+
+      currentProblem.hakubunList.forEach((kanji, index) => {
+        const state = userAnswers[index];
+        const node = document.createElement('div');
+        node.className = (state.kaeri.val || state.kaeri.hasHyphen) ? 'char-node has-kaeriten' : 'char-node';
+
+        // 漢字
+        const kanjiSpan = document.createElement('span');
+        kanjiSpan.className = 'kanji';
+        kanjiSpan.textContent = kanji;
+        node.appendChild(kanjiSpan);
+
+        // 送り仮名ターゲット
+        const okuriBtn = document.createElement('span');
+        if (state.okuri.isSet && !state.okuri.val) {
+          okuriBtn.className = 'okuri-target empty';
+        } else if (state.okuri.val) {
+          okuriBtn.className = 'okuri-target filled';
+          okuriBtn.textContent = state.okuri.val;
+        } else {
+          okuriBtn.className = 'okuri-target';
+          okuriBtn.textContent = '＋';
+        }
+        okuriBtn.onclick = () => openOkuriModal(index);
+        node.appendChild(okuriBtn);
+
+        // 返点ターゲット
+        const kaeriBtn = document.createElement('span');
+        if (state.kaeri.isSet && !state.kaeri.val) {
+          kaeriBtn.className = 'kaeriten-target empty';
+        } else if (state.kaeri.val) {
+          kaeriBtn.className = 'kaeriten-target filled';
+          kaeriBtn.textContent = state.kaeri.val;
+        } else {
+          kaeriBtn.className = 'kaeriten-target';
+          kaeriBtn.textContent = '＋';
+        }
+        kaeriBtn.onclick = () => openKaeriModal(index);
+        node.appendChild(kaeriBtn);
+
+        // 縦ハイフン
+        if (state.kaeri.hasHyphen) {
+          const hyphenSpan = document.createElement('span');
+          hyphenSpan.className = 'kaeriten-hyphen';
+          hyphenSpan.textContent = '│';
+          node.appendChild(hyphenSpan);
+        }
+
+        container.appendChild(node);
+      });
+    }
+
+    /* モーダル表示処理 */
+    function openOkuriModal(index) {
+      currentTargetIndex = index;
+      const state = userAnswers[index].okuri;
+      document.getElementById('okuri-modal-title').textContent = `「${currentProblem.hakubunList[index]}」の送り仮名`;
+      document.getElementById('okuri-input-text').value = state.val;
+      document.getElementById('okuri-modal').style.display = 'flex';
+      setTimeout(() => document.getElementById('okuri-input-text').focus(), 100);
+    }
+
+    function closeOkuriModal() {
+      document.getElementById('okuri-modal').style.display = 'none';
+      currentTargetIndex = null;
+    }
+
+    function saveOkurigana() {
+      if (currentTargetIndex !== null) {
+        const raw = document.getElementById('okuri-input-text').value.trim();
+        const kata = hiraToKata(raw);
+        userAnswers[currentTargetIndex].okuri = { val: kata, isSet: true };
+        render();
+        closeOkuriModal();
+      }
+    }
+
+    function setOkuriganaNone() {
+      if (currentTargetIndex !== null) {
+        userAnswers[currentTargetIndex].okuri = { val: "", isSet: true };
+        render();
+        closeOkuriModal();
+      }
+    }
+
+    function clearOkurigana() {
+      if (currentTargetIndex !== null) {
+        userAnswers[currentTargetIndex].okuri = { val: "", isSet: false };
+        render();
+        closeOkuriModal();
+      }
+    }
+
+    function openKaeriModal(index) {
+      currentTargetIndex = index;
+      const state = userAnswers[index].kaeri;
+      document.getElementById('hyphen-check').checked = state.hasHyphen;
+      document.getElementById('kaeri-modal').style.display = 'flex';
+    }
+
+    function closeKaeriModal() {
+      document.getElementById('kaeri-modal').style.display = 'none';
+      currentTargetIndex = null;
+    }
+
+    function selectKaeriten(item) {
+      if (currentTargetIndex !== null) {
+        const hasHyphen = document.getElementById('hyphen-check').checked;
+        if (item.isNone) {
+          userAnswers[currentTargetIndex].kaeri = { val: "", hasHyphen: hasHyphen, isSet: true };
+        } else {
+          userAnswers[currentTargetIndex].kaeri = { val: item.val, hasHyphen: hasHyphen, isSet: true };
+        }
+        render();
+        closeKaeriModal();
+      }
+    }
+
+    function clearKaeriten() {
+      if (currentTargetIndex !== null) {
+        userAnswers[currentTargetIndex].kaeri = { val: "", hasHyphen: false, isSet: false };
+        render();
+        closeKaeriModal();
+      }
+    }
+
+    function openTranslationModal() {
+      if (!currentProblem) return;
+      document.getElementById('translation-text').textContent = currentProblem.translation;
+      document.getElementById('translation-modal').style.display = 'flex';
+    }
+
+    function closeTranslationModal() {
+      document.getElementById('translation-modal').style.display = 'none';
+    }
+
+    function openExplainModal() {
+      if (!currentProblem) return;
+      document.getElementById('explain-text').textContent = currentProblem.explanation;
+      document.getElementById('explain-modal').style.display = 'flex';
+    }
+
+    function closeExplainModal() {
+      document.getElementById('explain-modal').style.display = 'none';
+    }
+
+    function initModalButtons() {
+      const grid = document.getElementById('kaeriten-buttons');
+      grid.innerHTML = '';
+
+      kaeritenCandidates.forEach(item => {
+        const btn = document.createElement('button');
+        btn.className = 'btn-kaeri' + (item.isNone ? ' btn-none' : '');
+        btn.textContent = item.label;
+        btn.onclick = () => selectKaeriten(item);
+        grid.appendChild(btn);
+      });
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'btn-action btn-delete';
+      delBtn.style.gridColumn = 'span 4';
+      delBtn.textContent = '返点を初期状態に戻す';
+      delBtn.onclick = () => clearKaeriten();
+      grid.appendChild(delBtn);
+    }
+
+    /* 答え合わせ判定 */
+    function checkAnswer() {
+      if (!currentProblem) return;
+
+      const userResultStr = currentProblem.hakubunList.map((kanji, i) => {
+        const o = userAnswers[i].okuri.val;
+        const k = userAnswers[i].kaeri.val;
+        const h = userAnswers[i].kaeri.hasHyphen ? 'ハ' : '';
+        const kaeriFull = k + h;
+
+        if (kaeriFull) {
+          return `${kanji}/${o}/${kaeriFull}`;
+        } else if (o) {
+          return `${kanji}/${o}`;
+        } else {
+          return `${kanji}`;
+        }
+      }).join(' ');
+
+      const resultMsg = document.getElementById('result-message');
+
+      if (userResultStr === currentProblem.kundoku.trim()) {
+        resultMsg.className = "result-message result-success";
+        resultMsg.textContent = "🎉 大正解！完璧です！";
+      } else {
+        resultMsg.className = "result-message result-error";
+        resultMsg.textContent = "❌ 残念！正解と一致していません。";
+      }
+    }
+
+    initModalButtons();
+    fetchProblems();
+  </script>
+</body>
+</html>
