@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>漢文 復文学習アプリ（スプレッドシート連携版）</title>
+  <title>漢文 復文学習アプリ（表示レイアウト修正版）</title>
   <style>
     body {
       font-family: sans-serif;
@@ -41,10 +41,12 @@
       max-width: 700px;
       margin: 0 auto;
       min-height: 280px;
+      box-sizing: border-box;
     }
 
     .vertical-text {
       writing-mode: vertical-rl;
+      -webkit-writing-mode: vertical-rl;
       text-orientation: upright;
       font-family: "Hiragino Mincho ProN", "Yu Mincho", serif;
       font-size: 32px;
@@ -64,16 +66,19 @@
       color: #666;
       margin-bottom: 12px;
       writing-mode: horizontal-tb;
+      -webkit-writing-mode: horizontal-tb;
     }
 
     .answer-panel {
       padding-right: 10px;
     }
 
+    /* 1文字ごとのブロック */
     .char-node {
       position: relative;
       display: inline-block;
       margin-bottom: 0.3em;
+      vertical-align: top;
     }
 
     .char-node.has-kaeriten {
@@ -375,7 +380,6 @@
   </div>
 
   <script>
-    // 指定いただいたWeb公開CSVのURL
     const SPREADSHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTvjMhVn_kBmbDVqr-Mk9mLLlSsKM1Ym4P9V3DrcMVmh9SFRJk5uJwTFQxpSPNA8Me1aeoHTPdi0C6r/pub?gid=0&single=true&output=csv";
 
     let problemList = [];
@@ -393,61 +397,78 @@
 
     let currentTargetIndex = null;
 
-    // CSV解析処理（カンマ区切りおよびダブルクォート処理対応）
+    // クォートや余白をきれいに除去する頑丈なCSVパース関数
     function parseCSV(text) {
       const lines = text.trim().split(/\r\n|\n/);
       if (lines.length < 2) return [];
 
-      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      const headers = lines[0].split(',').map(h => cleanValue(h));
       const result = [];
 
       for (let i = 1; i < lines.length; i++) {
         if (!lines[i].trim()) continue;
-        const values = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || lines[i].split(',');
+        
+        // カンマ分割（セル内クォート対応）
+        const values = [];
+        let insideQuote = false;
+        let token = '';
+        for (let c of lines[i]) {
+          if (c === '"') {
+            insideQuote = !insideQuote;
+          } else if (c === ',' && !insideQuote) {
+            values.push(cleanValue(token));
+            token = '';
+          } else {
+            token += c;
+          }
+        }
+        values.push(cleanValue(token));
+
         const row = {};
         headers.forEach((h, idx) => {
-          let val = values[idx] ? values[idx].trim() : "";
-          if (val.startsWith('"') && val.endsWith('"')) {
-            val = val.slice(1, -1).replace(/""/g, '"');
-          }
-          row[h] = val;
+          row[h] = values[idx] || '';
         });
         result.push(row);
       }
       return result;
     }
 
-    // 正解訓読データから「白文（漢字配列）」を自動抽出
-    function extractHakubun(kundokuStr) {
-      if (!kundokuStr) return [];
-      return kundokuStr.trim().split(/\s+/).map(token => token.split('/')[0]);
+    function cleanValue(str) {
+      if (!str) return '';
+      let s = str.trim();
+      if (s.startsWith('"') && s.endsWith('"')) {
+        s = s.slice(1, -1);
+      }
+      return s.replace(/""/g, '"').trim();
     }
 
-    // スプレッドシートからのデータ取得処理（エラーハンドリング強化）
+    // 正解訓読データから「白文（漢字配列）」を自動抽出（全角スペース・スラッシュ対応）
+    function extractHakubun(kundokuStr) {
+      if (!kundokuStr) return [];
+      // 全角スペース/全角スラッシュを半角に正規化して分割
+      const normalized = kundokuStr.replace(/ /g, ' ').replace(/／/g, '/');
+      return normalized.trim().split(/\s+/).map(token => {
+        return token.split('/')[0].trim();
+      }).filter(k => k.length > 0);
+    }
+
     async function fetchProblems() {
       const infoElem = document.getElementById('problem-info');
       try {
-        if (!SPREADSHEET_CSV_URL || SPREADSHEET_CSV_URL.includes("YOUR_SPREADSHEET")) {
-          throw new Error("URLが未設定です");
-        }
-        
         const res = await fetch(SPREADSHEET_CSV_URL);
-        if (!res.ok) {
-          throw new Error(`HTTPステータスエラー: ${res.status}`);
-        }
+        if (!res.ok) throw new Error(`HTTPステータス: ${res.status}`);
         
         const csvText = await res.text();
         const rawData = parseCSV(csvText);
 
         if (!rawData || rawData.length === 0) {
-          throw new Error("CSVデータが空かフォーマット不正です");
+          throw new Error("データが取得できませんでした");
         }
 
-        // データの整形
         problemList = rawData.map(item => ({
           title: item.title || "問題",
           kakikudashi: item.kakikudashi || "",
-          kundoku: item.kundoku || "",
+          kundoku: (item.kundoku || "").replace(/ /g, ' ').replace(/／/g, '/'),
           translation: item.translation || "現代語訳はありません。",
           explanation: item.explanation || "解説はありません。",
           hakubunList: extractHakubun(item.kundoku || "")
@@ -456,13 +477,12 @@
         loadProblem(0);
 
       } catch (e) {
-        console.error("スプレッドシートの読み込みエラー:", e);
+        console.error("読み込みエラー:", e);
         infoElem.style.color = "#dc3545";
-        infoElem.textContent = `❌ データ取得エラー: ${e.message}（1行目のヘッダー名を確認してください）`;
+        infoElem.textContent = `❌ 読み込みエラー: ${e.message}`;
       }
     }
 
-    // 問題読み込みと表示制御
     function loadProblem(index) {
       if (index < 0 || index >= problemList.length) return;
       
@@ -667,7 +687,6 @@
       grid.appendChild(delBtn);
     }
 
-    /* 答え合わせ判定 */
     function checkAnswer() {
       if (!currentProblem) return;
 
